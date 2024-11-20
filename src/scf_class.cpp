@@ -133,7 +133,6 @@ mat conGaussian::eval_overlap() {
     for(int i = 0; i < _num_basis; i++) {
         for(int j = 0; j < _num_basis; j++) {
             double Sab = 0.0;
-            //double Salways = 0.0;
 
             double s_p;
             int exponent_j;
