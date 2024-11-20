@@ -33,3 +33,4 @@ Compile static library and run tests for part 1 and part 2 in root directory:
 ```
 make everything
 ```
+# chem279_hw5
