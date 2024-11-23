@@ -156,12 +156,10 @@ mat conGaussian::eval_overlap() {
                         // std::cout << " alpha, beta: " << alpha << ", " << beta <<  " s_p: " << s_p << std::endl;
                     }
                     if(exponent_i == exponent_j) Sab += s_p;
-                    //Salways += s_p;
                 }
                 if(i == j)_atoms[i].norm.push_back(1.0 / sqrt(Sab));
             }
             overlap_mat(i,j) = Sab;
-            // overlap_mat(i,j) = Salways;
         }
     }
 
@@ -414,6 +412,154 @@ double conGaussian::eval_2ei_sAO(atom ao1, atom ao2){
   return gamma;    
 }
 
+double conGaussian::eval_gradient() {
+    mat xmat = zeros(_num_basis,_num_basis);
+    mat ymat = zeros(_num_basis, _num_basis); 
+    mat smat = zeros(3, _num_basis + _num_basis); //x,y,z for # rows
+    mat gmat = zeros(3, _num_basis + _num_basis); //gamma
+    mat nmat = zeros(_num_basis, _num_basis);   //nuclear repulsion
+    //mat emat = zeros(3, _num_basis);    //gradient
+    double energy = 0.0;
+    int col_count = 0;
+    for(int i = 0; i < _num_basis; i++) {
+        for(int j = 0; j < _num_basis; j++) {
+            xmat(i, j) = calc_x(i, j);
+            for(int dim = 0; dim < 3; dim++) {
+                smat(dim,col_count) = calc_deriv_overlap(i, j, dim);
+                if(i != j) energy += xmat(i,j) * smat(dim, col_count);
+            }
+        col_count++;
+        }
+    }
+    col_count = 0;
+    for(int a = 0; a < _atoms.size(); a++) {
+        for(int b = 0; b < _atoms.size(); b++) {
+            ymat(a, b) = calc_y(a, b);
+            nmat(a, b) = calc_nuc_repulsion(a, b);
+            for(int dim = 0; dim < 3; dim++) {
+                gmat(dim, col_count) = calc_deriv_gamma(a, b, dim);
+                if(a != b) energy += ymat(a,b) * gmat(dim, col_count) + nmat(a,b);
+            }
+        col_count++;
+        }
+    }
+    xmat.print("x matrix:");
+    ymat.print("y matrix:");
+    smat.print("deriv overlap matrix:");
+    gmat.print("deriv gamma matrix:");
+    nmat.print("nuclear repulsion matrix:");
+    return energy;
+}
+
+double conGaussian::deriv_i2e_pg(double xa, double xb, double sigmaA, double sigmaB){
+  double U =  pow(M_PI*sigmaA,3/2) * pow(M_PI*sigmaB,3/2);// calculate U using equation 3.8 & 3.11
+  double V2 =  1 / (sigmaA * sigmaB); // calculate V2 using equation 3.9
+  double Rd = xa - xb;
+  if(Rd == 0.0) {  // if Ra == Rb
+    return U * 2.0 * sqrt(V2 / M_PI);  // equation 3.15
+  }
+  double srT = sqrt(V2 * pow(Rd, 2));  // equation 3.7 sqrt
+  double result1 = (pow(U,2) * (Rd)) / (pow(Rd,2));  // equation 3.14
+  return result1 * - (erf(srT)/ abs(Rd)) * (2 * V2 / sqrt(M_PI)) * exp(sqrt(srT)); 
+}
+
+double conGaussian::calc_deriv_gamma(int a, int b, int dim) {
+    if(a == b) return 0.0;
+    double xa = _atoms[a].coords[dim];
+    double xb = _atoms[b].coords[dim];
+    rowvec alpha_a = _atoms[a].func[0].exp[0];
+    rowvec alpha_b = _atoms[b].func[0].exp[0];
+    rowvec da = _atoms[a].func[0].coef[0];
+    rowvec db = _atoms[b].func[0].coef[0];
+
+    int len = 3;
+
+    double gamma = 0.0;
+    for (size_t k1 = 0; k1 < len; k1++)
+    for (size_t k2 = 0; k2 < len; k2++) {
+        double sigmaA = 1 / (alpha_a(k1) + alpha_b(k2));
+        for (size_t j1 = 0; j1 < len; j1++)
+        for (size_t j2 = 0; j2 < len; j2++) {
+            double sigmaB = 1 / (alpha_b(k1) + alpha_a(k2));
+            double I2e_d = deriv_i2e_pg(xa, xb, sigmaA, sigmaB);
+            gamma += da(j1) * db(j2) * da(k1) * db(k2) * I2e_d;
+        }
+  }
+  return gamma;    
+}
+
+double conGaussian::calc_nuc_repulsion(int a, int b){
+    if(a == b) return 0.0;
+    double xa = _atoms[a].coords[0];
+    double xb = _atoms[b].coords[0];
+
+    int za = _atoms[a].val_electrons;
+    int zb = _atoms[b].val_electrons;
+
+    return - za * zb * (xa - xb) / pow(xa - xb, 3);
+}
+
+double conGaussian::calc_deriv_overlap(int i, int j, int dim) {
+    if(i == j) return 0.0;
+    double xa = _atoms[i].coords[dim];
+    double xb = _atoms[j].coords[dim];
+
+    double ang_a = _atoms[i].ang_moment(0, dim);
+    double ang_b = _atoms[j].ang_moment(0, dim);
+
+    double alpha_a = _atoms[i].func[0].exp[0][0];
+
+    double dist = xa - xb;
+
+    double phi_a = exp(-alpha_a * pow(dist,2));
+    double phi_b = exp(-alpha_a * pow(dist,2));
+
+    return -2 * alpha_a * dist * phi_a * phi_b;
+}
+
+double conGaussian::calc_x(int i, int j) {
+
+    int dim = 0;    //x dimension only
+    double x_u = _atoms[i].coords[dim];
+    double x_v = _atoms[j].coords[dim];
+
+    auto alpha_a = _atoms[i].func[0].exp[0][i];
+    auto alpha_b = _atoms[j].func[0].exp[0][j];
+
+    double phi_u = exp(-alpha_a * pow(x_u - x_v,2));
+    double phi_u_pr = - alpha_a * pow(x_u - x_v, 2) * phi_u;
+    double phi_v = exp(-alpha_b * pow(x_u - x_v,2));
+    double phi_v_pr = - alpha_b * pow(x_u - x_v, 2) * phi_v;
+    
+    return (2*phi_u * phi_u_pr) + (2*phi_v * phi_v_pr);
+}
+
+double conGaussian::calc_y(int a, int b) {
+
+    if(a == b) return 0.0;
+
+    double x_u = _atoms[a].coords[0];
+    double x_v = _atoms[b].coords[0];
+    double dist = arma::norm(_atoms[a].coords - _atoms[b].coords);
+
+    double s = 0.0;
+    for(int k = 0; k < 3; k++) {
+        double dk_a = _atoms[a].func[0].coef[0](k);
+        double dk_b = _atoms[b].func[0].coef[0](k);
+
+        double alpha_a = _atoms[a].func[0].exp[0](k);
+        double alpha_b = _atoms[b].func[0].exp[0](k);
+
+        double omega = center_product(x_u, x_v, alpha_a, alpha_b);
+        double omega_pr = deriv_center_product(alpha_a, alpha_b);
+
+        s += (dk_a * omega * dk_a * omega_pr) + \
+             (dk_b * omega * dk_b * omega_pr); 
+    }
+    return (2 * s)/ dist;
+    //return a_repel + b_repel;
+}
+
 int conGaussian::factorial(int n) {
     int result = n;
     if(n==0 || n==1) return 1;
@@ -440,6 +586,10 @@ int conGaussian::combinations(int m, int n) {
 
 double conGaussian::center_product(double xa, double xb, double alpha, double beta) {
     return ((alpha * xa) + (beta * xb)) / (alpha + beta); 
+}
+
+double conGaussian::deriv_center_product(double alpha_a, double alpha_b) {
+    return alpha_a / (alpha_a + alpha_b);
 }
 
 double conGaussian::calc_1d_overlap(double xa, double xb, double ang_a, double ang_b,

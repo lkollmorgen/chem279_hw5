@@ -68,11 +68,18 @@ class conGaussian
         int double_factorial(int);
         int combinations(int, int);
         double center_product(double, double, double, double);
+        double deriv_center_product(double, double);
         double calc_1d_overlap(double, double, double, double, double, double);
+        double eval_gradient();
+        double calc_x(int, int);
+        double calc_y(int, int);
+        double calc_deriv_overlap(int, int, int);
+        double calc_nuc_repulsion(int, int);
+        double calc_deriv_gamma(int, int, int);
+        double deriv_i2e_pg(double, double, double, double);
 
     //constructor/destructor
         conGaussian(std::string);
         ~conGaussian();
-
 
 };

@@ -35,7 +35,8 @@ run_pt1:
 	cd $(BIN_DIR); ./pt1
 
 all:
-	make pt1
+	cd ../src; make -s all
+	make -s pt1
 	make run_pt1
 
 	
