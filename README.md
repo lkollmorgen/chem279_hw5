@@ -1,10 +1,10 @@
-# chem279_hw4
+# chem279_hw5
 
-# Homework 4:  SCF
+# Homework 5: Analytical Gradient of CNDO/2
   ## Chem 279 - Dr. Mayank Agrawal
   ## Laura Jones
 
-  Last updated: 11.8.2024
+  Last updated: 11.22.2024
 
  ## In This Directory
   - test/
@@ -17,10 +17,11 @@
 	- STO3G_info/
 	- `GammaPesuoCode.cpp`
   - `Grading_rubric`
-  - `homework4.pdf`
-  - `ljones_hw4.pdf`
+  - `homework5.pdf`
+  - `ljones_hw5.pdf`
   - `README.md`
-	- Makefil
+	- `derivhw5.pdf`
+	- Makefile
 
 #### USAGE
 Create environment
